@@ -1,13 +1,14 @@
 import 'dart:async';
-import 'dart:typed_data';
+//import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:usage_stats/usage_stats.dart';
-import 'package:app_usage/app_usage.dart'; // Importación de paquetes necesarios
+//import 'package:app_usage/app_usage.dart'; // Importación de paquetes necesarios
 //import 'package:flutter_app_icon/flutter_app_icon.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:device_apps/device_apps.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bienvenida'),
+        title: Text('Bienvenid@'),
       ),
       body: Padding(
         padding: EdgeInsets.all(20.0),
@@ -97,13 +98,19 @@ class _MyAppState extends State<MyApp> {
   DateTime currentDate = DateTime.now();
   DateTime startDate = DateTime.now();
   DateTime endDate = DateTime.now();
+  /*** */
+  Future<List<ApplicationWithIcon>>? usageInfoList2;
 
   @override
   void initState() {
     super.initState();
     initUsage(); // Inicializa la recopilación de datos de uso de la aplicación
     getCedula(); // Obtiene la cédula almacenada al iniciar la aplicación
-    Timer.periodic(Duration(minutes: 2), (Timer timer) {
+    ///*** */
+    usageInfoList2 = getInstalledAppsWithIcons();
+
+    ///**** */
+    Timer.periodic(Duration(minutes: 5), (Timer timer) {
       initUsage(); // Actualiza los datos de uso cada dos minutos
     });
   }
@@ -111,25 +118,26 @@ class _MyAppState extends State<MyApp> {
   // Inicializa la recopilación de datos de uso de la aplicación
   Future<void> initUsage() async {
     try {
-      //VALIDAR QUE EL TIEMPO DEL DIA SE TOME DESDE LA HORA ACTUAL HASTA LAS 12:01, Y QUE EL TIEMPO DEL DIA ANTERIOR SE TOME BIEN.
       UsageStats.grantUsagePermission(); // Solicita permiso de uso
-      startDate =
-          DateTime(currentDate.year, currentDate.month, currentDate.day);
+      // Obtener la fecha y hora actual
+      startDate = DateTime(
+          currentDate.year, currentDate.month, currentDate.day, 0, 0, 1);
       print("INICIO $startDate");
-      endDate =
-          DateTime(currentDate.year, currentDate.month, currentDate.day + 1);
+      endDate = DateTime(
+          currentDate.year, currentDate.month, currentDate.day, 23, 59, 59);
       print("FIN $endDate");
+
       List<UsageInfo> usageInfos =
           await UsageStats.queryUsageStats(startDate, endDate);
 
       // Filtra la lista de datos de uso para incluir solo aplicaciones con un tiempo de uso mayor a 5 minutos
       List<UsageInfo> filteredUsageInfos = usageInfos
           .where((info) =>
-              double.parse(info.totalTimeInForeground!) > 3 * 60 * 1000)
+              double.parse(info.totalTimeInForeground!) > 5 * 60 * 1000)
           .toList();
-
       setState(() {
-        usageInfoList = filteredUsageInfos;
+        usageInfoList =
+            filteredUsageInfos; //datos filtrados con el tiempo mayor a 5 min
       });
     } catch (err) {
       print("Error: $err");
@@ -140,7 +148,6 @@ class _MyAppState extends State<MyApp> {
   Future<void> _refresh() async {
     await initUsage();
     // Obtener la fecha actual
-    DateTime currentDate = DateTime.now();
     String formattedDate = currentDate.toIso8601String();
 
     // Obtener los 5 primeros elementos de la lista de datos
@@ -149,22 +156,23 @@ class _MyAppState extends State<MyApp> {
     // Convertir los datos a un formato que se pueda enviar al servidor
     List<Map<String, dynamic>> dataToSend = firstFiveUsageInfo.map((info) {
       return {
-        'packageName': info.packageName,
-        'totalTimeInForeground': info.totalTimeInForeground,
+        'packageName': getAppNameFromPackageName(info.packageName!),
+        'totalTimeInForeground':
+            int.parse(info.totalTimeInForeground!) ~/ 60000,
       };
     }).toList();
 
     // Enviar los datos al servidor
     try {
       var url = Uri.parse(
-          'http://10.24.160.138:3000/enviar-datos'); // Reemplaza la dirección IP con la de tu servidor
+          'http://10.24.160.139:3000/enviar-datos'); // Reemplaza la dirección IP con la de tu servidor
 
       var response = await http.post(
         url,
         body: {
           'cedula': widget.cedula,
           'fecha': formattedDate,
-          'mayorConsumo': '12', // Envía la lista de datos de uso al servidor
+          'mayorConsumo': '26', // Obtener la mayor hora de consumo
           'usageData': jsonEncode(
               dataToSend), // Envía la lista de datos de uso al servidor
         },
@@ -440,16 +448,19 @@ class _MyAppState extends State<MyApp> {
     ];
 
     List<UsageInfo> pieChartData = [];
-    List<String> appNames = [];
+    List<String> appNamesSet = Set<String>().toList();
     List<int> appTimes = [];
 
     for (int i = 0; i < usageInfoList.length && i < 6; i++) {
       UsageInfo appInfo = usageInfoList[i];
-      appNames.add(getAppNameFromPackageName(appInfo.packageName!));
-      int timeInMinutes = int.parse(appInfo.totalTimeInForeground!) ~/ 60000;
-      appTimes.add(timeInMinutes);
-      pieChartData.add(appInfo);
+      String appName = getAppNameFromPackageName(appInfo.packageName!);
+      if (!appNamesSet.contains(appName)) {
+        appNamesSet.add(appName);
+        appTimes.add(int.parse(appInfo.totalTimeInForeground!) ~/ 60000);
+      }
     }
+
+    List<String> appNames = appNamesSet;
 
     if (usageInfoList.length > 6) {
       int otrosTime = 0;
@@ -497,7 +508,7 @@ class _MyAppState extends State<MyApp> {
                   ),
                   child: Center(
                     child: Text(
-                      '${totalTime ~/ 60000} min',
+                      '${_formatTime(totalTime ~/ 60000)}',
                       style: TextStyle(fontSize: 20),
                     ),
                   ),
@@ -512,43 +523,120 @@ class _MyAppState extends State<MyApp> {
           itemCount: usageInfoList.length,
           itemBuilder: (context, index) {
             UsageInfo appInfo = usageInfoList[index];
+            //String appName = appInfo.packageName.toString(); //para imprimir packetes
+            String packageName = appInfo.packageName!;
             String appName = getAppNameFromPackageName(appInfo.packageName!);
             String timeUsed =
-                '${int.parse(appInfo.totalTimeInForeground!) ~/ 60000} min';
+                //'${int.parse(appInfo.totalTimeInForeground!) ~/ 60000} min';
+                '${_formatTime(int.parse(appInfo.totalTimeInForeground!) ~/ 60000)}';
+
+            return FutureBuilder<Image>(
+              future: getAppIcon(
+                  packageName), // Obtiene el ícono de la aplicación asincrónicamente
+              builder: (BuildContext context, AsyncSnapshot<Image> snapshot) {
+                Widget image;
+                if (snapshot.connectionState == ConnectionState.done &&
+                    snapshot.hasData) {
+                  // Si el Future se completa y tenemos datos, utilizamos la imagen obtenida.
+                  image = snapshot.data!;
+                } else if (snapshot.connectionState ==
+                        ConnectionState.waiting ||
+                    !snapshot.hasData) {
+                  // Mientras esperamos o si no hay datos, podemos mostrar un ícono o imagen predeterminados.
+                  image = Image.asset(
+                      'assets/images/icono.png'); // Asegúrate de tener un ícono predeterminado
+                } else {
+                  // En caso de error o datos no disponibles, también mostramos un ícono predeterminado.
+                  image = Image.asset('assets/images/icono.png');
+                } // Usa un contenedor vacío si no hay ícono disponible
+                //image = Image.asset('assets/images/icono2.png');
+                return ListTile(
+                  leading: Container(
+                    width: 30, // Define un tamaño para el ícono
+                    height: 30,
+                    child: image,
+                  ),
+                  title: Text(appName),
+                  subtitle: Text(
+                      'Tiempo de uso: ${_formatTime(int.parse(appInfo.totalTimeInForeground!) ~/ 60000)}'),
+                );
+              },
+            );
+
+            /*Icon icon = getAppIcon("com.instagram.android");
             return ListTile(
+              leading: icon,
               title: Text(appName),
               subtitle: Text('Tiempo de uso: $timeUsed'),
-            );
+            );*/
           },
         ),
       ],
     );
+  }
+
+  // Método para formatear el tiempo en horas y minutos
+  String _formatTime(int minutes) {
+    if (minutes < 60) {
+      return '$minutes min';
+    } else {
+      int hours = minutes ~/ 60;
+      int remainingMinutes = minutes % 60;
+      return '$hours h $remainingMinutes min';
+    }
   }
 }
 
 // Obtiene el nombre de la aplicación a partir del nombre del paquete
 String getAppNameFromPackageName(String packageName) {
   List<String> appNames = [
-    'Facebook',
     'Instagram',
+    'Facebook',
     'Duolingo',
     'TikTok',
     'Miapp',
     'Youtube',
     'Gmail',
+    'Twitch',
+    'Twitter',
+    'NexusLauncher',
+    'Gm',
+    'Wellbeing',
+    'Vending',
   ];
-
-  for (String appName in appNames) {
-    if (packageName.toLowerCase().contains(appName.toLowerCase())) {
-      return appName;
-    } else {
-      // Dividir el packageName en partes usando el delimitador '.'
-      List<String> packageParts = packageName.split('.');
-      // Obtener el último elemento de la lista como el nombre de la aplicación
-      String appName2 = packageParts.last;
-      return appName2;
+  String appName = packageName;
+  for (String listName in appNames) {
+    if (packageName.toLowerCase().contains(listName.toLowerCase())) {
+      return listName;
+      //return appName.substring(0, 1).toUpperCase() + appName.substring(1);
     }
   }
+  return appName; // Devuelve el nombre del paquete si no se encuentra ningún nombre de aplicación correspondiente
+}
 
-  return packageName; // Devuelve el nombre del paquete si no se encuentra ningún nombre de aplicación correspondiente
+Future<List<ApplicationWithIcon>> getInstalledAppsWithIcons() async {
+  // Obtiene una lista de todas las aplicaciones instaladas (con lanzadores) que incluyen íconos.
+  List<Application> apps = await DeviceApps.getInstalledApplications(
+    includeAppIcons: true,
+    includeSystemApps:
+        true, // Cambia a false si no deseas incluir apps del sistema.
+    //onlyAppsWithLaunchers: true
+  );
+
+  // Filtra la lista para quedarse solo con aplicaciones que tengan íconos.
+  return apps.whereType<ApplicationWithIcon>().toList();
+}
+
+//CORREGIR LA FUNCION NO ENCUENTRA BIEN LOS ICONOS
+Future<Image> getAppIcon(String packageName) async {
+  try {
+    Application? app = await DeviceApps.getApp(packageName);
+    if (app is ApplicationWithIcon) {
+      return Image.memory(app.icon);
+    }
+  } catch (e) {
+    print("Error al obtener el ícono de la aplicación: $e");
+  }
+  // Retorna un ícono predeterminado si no se encuentra el ícono específico o en caso de error
+  return Image.asset('assets/images/icono2.png');
 }
