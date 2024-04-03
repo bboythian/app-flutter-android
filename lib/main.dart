@@ -35,12 +35,17 @@ class WelcomeScreen extends StatefulWidget {
 class _WelcomeScreenState extends State<WelcomeScreen> {
   final TextEditingController _cedulaController =
       TextEditingController(); // Controlador para el campo de texto de la cédula
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bienvenid@'),
+        title: const Text(
+          'Bienvenid@',
+          style: TextStyle(
+            fontFamily: 'FFMetaPro',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: Padding(
         padding: EdgeInsets.all(20.0),
@@ -69,7 +74,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                               cedula)), // Navega a la aplicación principal con la cédula como argumento
                 );
               },
-              child: Text('Continuar'),
+              child: const Text('Continuar'),
             ),
           ],
         ),
@@ -98,18 +103,23 @@ class _MyAppState extends State<MyApp> {
   DateTime currentDate = DateTime.now();
   DateTime startDate = DateTime.now();
   DateTime endDate = DateTime.now();
-  /*** */
   Future<List<ApplicationWithIcon>>? usageInfoList2;
+
+  Future<List<Application>>? _apps; //ICONS
 
   @override
   void initState() {
     super.initState();
     initUsage(); // Inicializa la recopilación de datos de uso de la aplicación
     getCedula(); // Obtiene la cédula almacenada al iniciar la aplicación
-    ///*** */
-    usageInfoList2 = getInstalledAppsWithIcons();
 
-    ///**** */
+    _apps = DeviceApps.getInstalledApplications(
+      //ICONS
+      includeAppIcons: true,
+      includeSystemApps:
+          true, // Cambiado a true para incluir aplicaciones del sistema
+    );
+
     Timer.periodic(Duration(minutes: 5), (Timer timer) {
       initUsage(); // Actualiza los datos de uso cada dos minutos
     });
@@ -121,11 +131,11 @@ class _MyAppState extends State<MyApp> {
       UsageStats.grantUsagePermission(); // Solicita permiso de uso
       // Obtener la fecha y hora actual
       startDate = DateTime(
-          currentDate.year, currentDate.month, currentDate.day, 0, 0, 1);
-      print("INICIO $startDate");
+          currentDate.year, currentDate.month, currentDate.day, 0, 0, 0, 1);
+      print("INICIO init $startDate");
       endDate = DateTime(
-          currentDate.year, currentDate.month, currentDate.day, 23, 59, 59);
-      print("FIN $endDate");
+          currentDate.year, currentDate.month, currentDate.day, 23, 59, 59, 1);
+      print("FIN inti $endDate");
 
       List<UsageInfo> usageInfos =
           await UsageStats.queryUsageStats(startDate, endDate);
@@ -206,6 +216,8 @@ class _MyAppState extends State<MyApp> {
   void _updateDate(int days) {
     setState(() {
       currentDate = currentDate.add(Duration(days: days));
+      print("*************************************************************");
+      print("days en update $days");
       // Limita la fecha actual para evitar fechas futuras o anteriores al inicio del registro
       if (currentDate.isAfter(DateTime.now())) {
         currentDate = DateTime.now();
@@ -213,10 +225,13 @@ class _MyAppState extends State<MyApp> {
           .isBefore(DateTime.now().subtract(Duration(days: 30)))) {
         currentDate = DateTime.now().subtract(Duration(days: 30));
       }
-      startDate =
-          DateTime(currentDate.year, currentDate.month, currentDate.day);
-      endDate =
-          DateTime(currentDate.year, currentDate.month, currentDate.day + 1);
+
+      // print("CurrenDate update $currentDate");
+
+      // Limpiar la lista de aplicaciones almacenadas antes de actualizar los datos de uso
+    });
+    setState(() {
+      usageInfoList.clear();
     });
     initUsage(); // Actualiza los datos de uso después de cambiar la fecha
   }
@@ -225,14 +240,15 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        iconTheme: IconThemeData(color: Colors.white),
         title: const Text(
-          "Ciberadiccion",
-          style: TextStyle(color: Colors.white),
+          "App-Ciberadicción",
+          style: TextStyle(color: Colors.white, fontFamily: 'FFMetaProText2'),
         ),
         backgroundColor: Color(0xFF002856),
         actions: <Widget>[
           IconButton(
-            icon: Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
             onPressed: () {
               _refresh(); // Actualiza los datos de uso al presionar el botón de actualización
             },
@@ -248,50 +264,173 @@ class _MyAppState extends State<MyApp> {
                 color: Color(0xFF002856),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                //crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'App-Ciberadiccion',
+                  const CircleAvatar(
+                    radius: 32,
+                    backgroundImage: AssetImage('assets/images/icono.png'),
+                  ),
+                  const SizedBox(
+                      width: 5), // Espacio entre la imagen y el texto
+                  const Text(
+                    'App-Ciberadicción',
                     style: TextStyle(
+                      fontFamily: 'FFMetaProText1',
                       color: Colors.white,
-                      fontSize: 24,
+                      fontSize: 22,
+// Grosor del subrayado
                     ),
                   ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Bienvenido $cedula', // Muestra la cédula del usuario
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
+                  const SizedBox(
+                      height: 5), // Espacio de 10 unidades entre los textos
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Bienvenid@ : ' +
+                            (cedula.length >= 10
+                                ? '******${cedula.substring(6)}'
+                                : ''),
+                        style: const TextStyle(
+                          fontFamily: 'FFMetaProText1',
+                          color: Colors.white,
+                          fontSize: 19,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
             ListTile(
-              title: Text('Home'),
+              title: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10.0), // Padding horizontal
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    vertical:
+                        0.0, // Margen vertical para ambos lados (en este caso, cero)
+                  ).add(
+                    const EdgeInsets.only(
+                        left: 2.0,
+                        right:
+                            80.0), // Añade márgenes específicos para los lados izquierdo y derecho
+                  ), // Margen horizontal de la línea roja
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Color(0xFFA51008), // Color de la línea roja
+                        width: 3.0, // Grosor de la línea roja
+                      ),
+                    ),
+                  ),
+                  child: const Text(
+                    'Estadísticas de uso',
+                    style: TextStyle(
+                      fontFamily: 'FFMetaProText4',
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
               onTap: () {
                 _onTabTapped(
                     0); // Cambia a la pestaña de inicio al seleccionar "Home" en el menú lateral
               },
             ),
+            const SizedBox(height: 8),
             ListTile(
-              title: Text('Notificaciones'),
+              title: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10.0), // Padding horizontal
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    vertical:
+                        0.0, // Margen vertical para ambos lados (en este caso, cero)
+                  ).add(
+                    const EdgeInsets.only(
+                        left: 2.0,
+                        right:
+                            120.0), // Añade márgenes específicos para los lados izquierdo y derecho
+                  ), // Margen horizontal de la línea roja
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Color.fromRGBO(
+                            165, 16, 8, 1.0), // Color de la línea roja
+                        width: 3.0, // Grosor de la línea roja
+                      ),
+                    ),
+                  ),
+                  child: const Text(
+                    'Notificaciones',
+                    style: TextStyle(
+                      fontFamily: 'FFMetaProText4',
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
               onTap: () {
                 _onTabTapped(
-                    1); // Cambia a la pestaña de notificaciones al seleccionar "Notificaciones" en el menú lateral
+                    1); // Cambia a la pestaña de inicio al seleccionar "Home" en el menú lateral
               },
             ),
+            const SizedBox(height: 8),
             ListTile(
-              title: Text('Ajustes'),
+              title: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10.0), // Padding horizontal
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    vertical:
+                        0.0, // Margen vertical para ambos lados (en este caso, cero)
+                  ).add(
+                    const EdgeInsets.only(
+                        left: 2.0,
+                        right:
+                            180.0), // Añade márgenes específicos para los lados izquierdo y derecho
+                  ), // Margen horizontal de la línea roja
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Color(0xFFA51008), // Color de la línea roja
+                        width: 3.0, // Grosor de la línea roja
+                      ),
+                    ),
+                  ),
+                  child: const Text(
+                    'Ajustes',
+                    style: TextStyle(
+                      fontFamily: 'FFMetaProText4',
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
               onTap: () {
                 _onTabTapped(
-                    2); // Cambia a la pestaña de ajustes al seleccionar "Ajustes" en el menú lateral
+                    2); // Cambia a la pestaña de inicio al seleccionar "Home" en el menú lateral
               },
+            ),
+            const SizedBox(height: 320),
+            Container(
+              alignment: Alignment.bottomCenter,
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                'UCUENCA',
+                style: TextStyle(
+                  fontFamily: 'FFMetaProTitle',
+                  color: Color(0xFF6F6F6F),
+                  fontSize:
+                      50, // Tamaño de fuente fijo o puedes hacerlo responsive
+                ),
+              ),
             ),
           ],
         ),
       ),
+
       body: _buildBody(), // Construye el cuerpo de la aplicación
     );
   }
@@ -470,120 +609,127 @@ class _MyAppState extends State<MyApp> {
       appNames.add("Otros");
       appTimes.add(otrosTime ~/ 60000);
     }
-
-    return Column(
-      children: [
-        Container(
-          height: 300,
-          child: Stack(
-            children: [
-              SfCircularChart(
-                series: <CircularSeries>[
-                  PieSeries<String, String>(
-                    dataSource: appNames,
-                    xValueMapper: (data, _) => data,
-                    yValueMapper: (data, _) => appTimes[appNames.indexOf(data)],
-                    pointColorMapper: (data, _) {
-                      int index = appNames.indexOf(data) % colors.length;
-                      return colors[index];
-                    },
-                    dataLabelSettings: const DataLabelSettings(
-                        isVisible: true,
-                        textStyle: TextStyle(fontSize: 16),
-                        labelPosition: ChartDataLabelPosition.outside),
-                  ),
-                ],
-              ),
-              Center(
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(
-                      color: Colors.grey,
-                      width: 5.0,
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          Container(
+            height: 300,
+            child: Stack(
+              children: [
+                SfCircularChart(
+                  series: <CircularSeries>[
+                    PieSeries<String, String>(
+                      dataSource: appNames,
+                      xValueMapper: (data, _) => data,
+                      yValueMapper: (data, _) =>
+                          appTimes[appNames.indexOf(data)],
+                      pointColorMapper: (data, _) {
+                        int index = appNames.indexOf(data) % colors.length;
+                        return colors[index];
+                      },
+                      dataLabelSettings: const DataLabelSettings(
+                          isVisible: true,
+                          textStyle: TextStyle(fontSize: 16),
+                          labelPosition: ChartDataLabelPosition.outside),
                     ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${_formatTime(totalTime ~/ 60000)}',
-                      style: TextStyle(fontSize: 20),
+                  ],
+                ),
+                Center(
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(
+                        color: Colors.grey,
+                        width: 5.0,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${_formatTime(totalTime ~/ 60000)}',
+                        style: TextStyle(fontSize: 20),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: ScrollPhysics(),
-          itemCount: usageInfoList.length,
-          itemBuilder: (context, index) {
-            UsageInfo appInfo = usageInfoList[index];
-            //String appName = appInfo.packageName.toString(); //para imprimir packetes
-            String packageName = appInfo.packageName!;
-            String appName = getAppNameFromPackageName(appInfo.packageName!);
-            String timeUsed =
-                //'${int.parse(appInfo.totalTimeInForeground!) ~/ 60000} min';
-                '${_formatTime(int.parse(appInfo.totalTimeInForeground!) ~/ 60000)}';
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const ScrollPhysics(),
+            itemCount: usageInfoList.length,
+            itemBuilder: (context, index) {
+              return _buildListTile(usageInfoList[index]);
+            },
+          ),
+        ],
+      ),
 
-            return FutureBuilder<Image>(
-              future: getAppIcon(
-                  packageName), // Obtiene el ícono de la aplicación asincrónicamente
-              builder: (BuildContext context, AsyncSnapshot<Image> snapshot) {
-                Widget image;
-                if (snapshot.connectionState == ConnectionState.done &&
-                    snapshot.hasData) {
-                  // Si el Future se completa y tenemos datos, utilizamos la imagen obtenida.
-                  image = snapshot.data!;
-                } else if (snapshot.connectionState ==
-                        ConnectionState.waiting ||
-                    !snapshot.hasData) {
-                  // Mientras esperamos o si no hay datos, podemos mostrar un ícono o imagen predeterminados.
-                  image = Image.asset(
-                      'assets/images/icono.png'); // Asegúrate de tener un ícono predeterminado
-                } else {
-                  // En caso de error o datos no disponibles, también mostramos un ícono predeterminado.
-                  image = Image.asset('assets/images/icono.png');
-                } // Usa un contenedor vacío si no hay ícono disponible
-                //image = Image.asset('assets/images/icono2.png');
-                return ListTile(
-                  leading: Container(
-                    width: 30, // Define un tamaño para el ícono
-                    height: 30,
-                    child: image,
-                  ),
-                  title: Text(appName),
-                  subtitle: Text(
-                      'Tiempo de uso: ${_formatTime(int.parse(appInfo.totalTimeInForeground!) ~/ 60000)}'),
-                );
-              },
-            );
-
-            /*Icon icon = getAppIcon("com.instagram.android");
-            return ListTile(
-              leading: icon,
-              title: Text(appName),
-              subtitle: Text('Tiempo de uso: $timeUsed'),
-            );*/
-          },
-        ),
-      ],
+      //Nueva función para imprimir una lista de aplicaciones
     );
   }
+}
 
-  // Método para formatear el tiempo en horas y minutos
-  String _formatTime(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
+Widget _buildListTile(UsageInfo appInfo) {
+  return FutureBuilder<Image>(
+    future: getAppIcon(appInfo
+        .packageName!), // Obtiene el ícono de la aplicación asincrónicamente
+    builder: (BuildContext context, AsyncSnapshot<Image> snapshot) {
+      Widget image;
+      if (snapshot.connectionState == ConnectionState.done &&
+          snapshot.hasData) {
+        // Si el Future se completa y tenemos datos, utilizamos la imagen obtenida.
+        image = snapshot.data!;
+      } else {
+        // En caso de error o datos no disponibles, también mostramos un ícono predeterminado.
+        image = Image.asset('assets/images/icono2.png');
+      } // Usa un contenedor vacío si no hay ícono disponible
+      return ListTile(
+        leading: Container(
+          width: 35, // Define un tamaño para el ícono
+          height: 35,
+          child: image,
+        ),
+        title: Text(getAppNameFromPackageName(appInfo.packageName!)),
+        subtitle: Text(
+          'Tiempo de uso: ${_formatTime(int.parse(appInfo.totalTimeInForeground!) ~/ 60000)}',
+        ),
+      );
+    },
+  );
+}
+
+Future<Image> getAppIcon(String packageName) async {
+  try {
+    Application? app = await DeviceApps.getApp(packageName);
+    print("nombre $packageName");
+    if (app is ApplicationWithIcon) {
+      print("entro Image");
+      // Si la aplicación tiene un ícono, convierte el icono en una imagen y retorna.
+      return Image.memory(app.icon);
     } else {
-      int hours = minutes ~/ 60;
-      int remainingMinutes = minutes % 60;
-      return '$hours h $remainingMinutes min';
+      // En caso de que la aplicación no tenga un ícono, retorna un ícono predeterminado.
+      return Image.asset('assets/images/icono.png');
     }
+  } catch (e) {
+    // Captura y log de errores al intentar obtener la aplicación.
+    print("Error al obtener la aplicación '$packageName': $e");
+    // En caso de error, retorna un ícono predeterminado.
+    return Image.asset('assets/images/icono.png');
+  }
+}
+
+// Método para formatear el tiempo en horas y minutos
+String _formatTime(int minutes) {
+  if (minutes < 60) {
+    return '$minutes min';
+  } else {
+    int hours = minutes ~/ 60;
+    int remainingMinutes = minutes % 60;
+    return '$hours h $remainingMinutes min';
   }
 }
 
@@ -603,6 +749,10 @@ String getAppNameFromPackageName(String packageName) {
     'Gm',
     'Wellbeing',
     'Vending',
+    'Whatsapp',
+    'Chrome',
+    'Alarmclock',
+    'Alarmclock',
   ];
   String appName = packageName;
   for (String listName in appNames) {
@@ -614,29 +764,47 @@ String getAppNameFromPackageName(String packageName) {
   return appName; // Devuelve el nombre del paquete si no se encuentra ningún nombre de aplicación correspondiente
 }
 
-Future<List<ApplicationWithIcon>> getInstalledAppsWithIcons() async {
-  // Obtiene una lista de todas las aplicaciones instaladas (con lanzadores) que incluyen íconos.
-  List<Application> apps = await DeviceApps.getInstalledApplications(
-    includeAppIcons: true,
-    includeSystemApps:
-        true, // Cambia a false si no deseas incluir apps del sistema.
-    //onlyAppsWithLaunchers: true
-  );
+// Define los estilos de texto
+final TextStyle principalStyle = TextStyle(
+  fontFamily: 'FFMetaPro',
+  fontWeight: FontWeight.bold,
+);
 
-  // Filtra la lista para quedarse solo con aplicaciones que tengan íconos.
-  return apps.whereType<ApplicationWithIcon>().toList();
-}
+final TextStyle casosEspecialesStyle = TextStyle(
+  fontFamily: 'FFMetaPro',
+);
 
-//CORREGIR LA FUNCION NO ENCUENTRA BIEN LOS ICONOS
-Future<Image> getAppIcon(String packageName) async {
-  try {
-    Application? app = await DeviceApps.getApp(packageName);
-    if (app is ApplicationWithIcon) {
-      return Image.memory(app.icon);
-    }
-  } catch (e) {
-    print("Error al obtener el ícono de la aplicación: $e");
-  }
-  // Retorna un ícono predeterminado si no se encuentra el ícono específico o en caso de error
-  return Image.asset('assets/images/icono2.png');
-}
+final TextStyle secundariaStyle = TextStyle(
+  fontFamily: 'Alegraya',
+);
+
+final TextStyle complementariaStyle = TextStyle(
+  fontFamily: 'AlegrayaSans',
+);
+
+// FUNCIONA BIEN SI SE COLOLA DEBAJO DE LA LISTA
+// FutureBuilder<List<Application>>(
+//         future: _apps,
+//         builder: (context, snapshot) {
+//           if (snapshot.connectionState == ConnectionState.done) {
+//             if (snapshot.hasData) {
+//               return ListView.builder(p
+//                 itemBuilder: (context, index) {
+//                   Application app = snapshot.data![index];
+//                   return ListTile(
+//                     leading: app is ApplicationWithIcon
+//                         ? Image.memory(app.icon)
+//                         : null,
+//                     title: Text(app.appName),
+//                   );
+//                 },
+//                 itemCount: snapshot.data!.length,
+//               );
+//             } else {
+//               return Center(child: Text('No Applications Found'));
+//             }
+//           } else {
+//             return Center(child: CircularProgressIndicator());
+//           }
+//         },
+//       ),

@@ -5,5 +5,7 @@
 <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+          <!-- Este permiso es correcto para solicitar acceso a todos los paquetes instalados en el dispositivo. Ten en cuenta las restricciones de Google Play respecto a su uso. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
     
 </manifest>
