@@ -9,21 +9,24 @@ import 'package:device_apps/device_apps.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:android_alarm_manager/android_alarm_manager.dart';
+
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SharedPreferences prefs = await SharedPreferences.getInstance();
-  String? storedCedula = prefs.getString('cedula');
+  String? storedEmail = prefs.getString('email');
   bool? hasCompletedPreferences = prefs.getBool('hasCompletedPreferences');
 
   runApp(MaterialApp(
-    // home: storedCedula == null ? WelcomeScreen() : MyApp(cedula: storedCedula),
-    home: storedCedula == null
+    home: storedEmail == null
         ? WelcomeScreen()
         : (hasCompletedPreferences == true
-            ? MyApp(cedula: storedCedula)
+            ? MyApp(email: storedEmail)
             : UserPreferencesScreen()),
-    // theme: ThemeData(primarySwatch: Colors.blue),
     theme: ThemeData(
       primarySwatch: Colors.blue,
       textSelectionTheme: const TextSelectionThemeData(
@@ -44,7 +47,8 @@ class WelcomeScreen extends StatefulWidget {
 
 // Widget Terminos y condiciones
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+
   bool _isAccepted = false;
   bool _isModalShown = false;
 
@@ -112,7 +116,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ElevatedButton(
               onPressed: _isAccepted
                   ? () {
-                      _showCedulaDialog(context);
+                      _showEmailDialog(context);
                     }
                   : null,
               style: ElevatedButton.styleFrom(
@@ -197,32 +201,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     });
   }
 
-  bool validarCedulaEcuatoriana(String cedula) {
-    if (cedula.length != 10) return false;
-
-    final List<int> coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2];
-    final int provinceCode = int.parse(cedula.substring(0, 2));
-
-    // Validar el código de provincia
-    if (provinceCode < 1 || provinceCode > 24) return false;
-
-    int total = 0;
-
-    for (int i = 0; i < coefficients.length; i++) {
-      int value = int.parse(cedula[i]) * coefficients[i];
-      total += value > 9 ? value - 9 : value;
-    }
-
-    final int verificationDigit = int.parse(cedula[9]);
-    final int calculatedVerificationDigit =
-        total % 10 == 0 ? 0 : 10 - (total % 10);
-
-    return verificationDigit == calculatedVerificationDigit;
-  }
-
-  void _showCedulaDialog(BuildContext context) {
+  void _showEmailDialog(BuildContext context) {
     String errorMessage = '';
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -231,7 +211,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             return AlertDialog(
               backgroundColor: Colors.white,
               title: const Text(
-                'Ingresar cédula',
+                'Ingresar correo electrónico',
                 style: TextStyle(
                   fontFamily: 'FFMetaProText2',
                   fontWeight: FontWeight.bold,
@@ -242,19 +222,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
-                    controller: _cedulaController,
+                    controller: _emailController,
                     style: const TextStyle(
                       color: Color(0xFF002856), // Color del texto del input
                       fontFamily: 'FFMetaProText3',
                       fontSize: 16,
                     ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    keyboardType: TextInputType.emailAddress,
+                    // inputFormatters: [
+                    //   FilteringTextInputFormatter.digitsOnly,
+                    // ],
                     cursorColor: Color(0xFF002856),
                     decoration: InputDecoration(
-                      labelText: 'Número de cédula*',
+                      labelText: 'Correo electrónico*',
                       labelStyle: const TextStyle(
                         color: Color(0xFF002856),
                         fontFamily: 'FFMetaProText3',
@@ -296,25 +276,51 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    String cedula = _cedulaController.text;
-                    if (cedula.length != 10) {
+                    String email = _emailController.text;
+                    if (email.isEmpty ||
+                        !RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email)) {
                       setState(() {
-                        errorMessage = 'La cédula debe tener 10 dígitos';
+                        errorMessage = 'Por favor ingrese un correo válido';
                       });
                       return;
                     }
-
-                    // Guardar cédula y navegar a la siguiente pantalla
-                    SharedPreferences prefs =
-                        await SharedPreferences.getInstance();
-                    prefs.setString('cedula', cedula);
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        // builder: (context) => MyApp(cedula: cedula),
-                        builder: (context) => UserPreferencesScreen(),
-                      ),
+                    print('Enviando solicitud al servidor...');
+                    print('Correo electrónico: $email');
+                    // Validar correo en el servidor
+                    var url =
+                        Uri.parse('http://10.24.162.114:8081/validar-email');
+                    var response = await http.post(
+                      url,
+                      headers: {"Content-Type": "application/json"},
+                      body: json.encode({'email': email}),
                     );
+
+                    if (response.statusCode == 200) {
+                      var responseBody = json.decode(response.body);
+                      print('Respuesta del servidor:');
+                      print(responseBody);
+                      if (responseBody['exists'] == true) {
+                        // Guardar correo y navegar a la siguiente pantalla
+                        SharedPreferences prefs =
+                            await SharedPreferences.getInstance();
+                        prefs.setString('email', email);
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => UserPreferencesScreen(),
+                          ),
+                        );
+                      } else {
+                        setState(() {
+                          errorMessage = 'Correo no registrado';
+                        });
+                      }
+                    } else {
+                      setState(() {
+                        errorMessage = 'Correo no registrado para el proyecto';
+                      });
+                      print('Error en la solicitud: ${response.statusCode}');
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     primary: Color(0xFF002856), // Color de fondo
@@ -360,7 +366,7 @@ class _UserPreferencesScreenState extends State<UserPreferencesScreen> {
     'destinosViaje': List.generate(6, (_) => false),
     'actividadesViaje': List.generate(6, (_) => false),
     'gadgets': List.generate(6, (_) => false),
-    'aplicaciones': List.generate(6, (_) => false),
+    'aplicaciones': List.generate(7, (_) => false),
     'comida': List.generate(6, (_) => false),
     'frecuenciaComida': List.generate(6, (_) => false),
     'deportes': List.generate(6, (_) => false),
@@ -391,11 +397,17 @@ class _UserPreferencesScreenState extends State<UserPreferencesScreen> {
     try {
       // var url =
       //     Uri.parse('https://ingsoftware.ucuenca.edu.ec/enviar-preferencias');
-      var url = Uri.parse('http://10.24.160.140:8080/enviar-preferencias');
+      var url = Uri.parse('http://10.24.162.114:8081/enviar-preferencias');
+      // Obtener la fecha actual y formatearla
+      DateTime now = DateTime.now();
+      String formattedDate = DateFormat('MMM').format(now).toUpperCase() +
+          DateFormat('yy').format(now);
+
       var response = await http.post(
         url,
         body: {
-          'cedula': prefs.getString('cedula'),
+          'email': prefs.getString('email'),
+          'periodo': formattedDate, // Nuevo campo añadido
           'peliculas': _preferences['peliculas'],
           'musica': _preferences['musica'],
           'series': _preferences['series'],
@@ -428,7 +440,7 @@ class _UserPreferencesScreenState extends State<UserPreferencesScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-          builder: (context) => MyApp(cedula: prefs.getString('cedula')!)),
+          builder: (context) => MyApp(email: prefs.getString('email')!)),
     );
   }
 
@@ -581,7 +593,7 @@ class _UserPreferencesScreenState extends State<UserPreferencesScreen> {
               ]),
               const SizedBox(height: 20),
               const Text(
-                '6. Tecnologías y gadgets',
+                '6. Tecnologías y dispositivos',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
@@ -602,7 +614,8 @@ class _UserPreferencesScreenState extends State<UserPreferencesScreen> {
                 'Aplicaciones de streaming (música/películas)',
                 'Aplicaciones de productividad (calendarios, notas)',
                 'Aplicaciones de fitness y salud',
-                'Aplicaciones de noticias'
+                'Aplicaciones de noticias',
+                'Aplicaciones de juegos'
               ]),
               const SizedBox(height: 20),
               const Text(
@@ -684,14 +697,14 @@ class _UserPreferencesScreenState extends State<UserPreferencesScreen> {
 }
 
 class MyApp extends StatefulWidget {
-  final String cedula;
-  MyApp({required this.cedula});
+  final String email;
+  MyApp({required this.email});
   @override
   _MyAppState createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  String cedula = '';
+  String email = '';
   List<UsageInfo> usageInfoList = [];
   int _currentIndex = 0;
   bool notificationEnabled = false;
@@ -703,10 +716,21 @@ class _MyAppState extends State<MyApp> {
 
   String _mostActiveHour = '';
   List<Map<String, dynamic>> _usageData = [];
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+
+  void configureLocalNotificationPlugin() {
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    const androidInitializationSettings =
+        AndroidInitializationSettings('ic_notificacion');
+    const initializationSettings =
+        InitializationSettings(android: androidInitializationSettings);
+    flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
 
   @override
   void initState() {
     super.initState();
+    configureLocalNotificationPlugin();
     _getMostActiveHour(currentDate);
     //requestPermissions();
     initUsage();
@@ -729,10 +753,19 @@ class _MyAppState extends State<MyApp> {
     try {
       UsageStats.grantUsagePermission();
       startDate = DateTime(
-          currentDate.year, currentDate.month, currentDate.day, 0, 0, 1);
+          currentDate.year, currentDate.month, currentDate.day, 0, 1, 1, 1, 1);
       endDate = DateTime(
-          currentDate.year, currentDate.month, currentDate.day, 23, 59, 59);
-
+        currentDate.year,
+        currentDate.month,
+        currentDate.day,
+        23,
+        59,
+        59,
+        999,
+        999,
+      );
+      print('Hora init start:  ${startDate.toIso8601String()}');
+      print('Hora init end:  $endDate');
       List<UsageInfo> usageInfos =
           await UsageStats.queryUsageStats(startDate, endDate);
 
@@ -740,6 +773,18 @@ class _MyAppState extends State<MyApp> {
           .where((info) =>
               double.parse(info.totalTimeInForeground!) > 5 * 60 * 1000)
           .toList();
+
+      // Imprimir la lista de aplicaciones filtradas con sus fechas de uso
+      for (var info in filteredUsageInfos) {
+        DateTime firstTimeStamp = DateTime.fromMillisecondsSinceEpoch(
+            int.parse(info.firstTimeStamp!));
+        DateTime lastTimeStamp =
+            DateTime.fromMillisecondsSinceEpoch(int.parse(info.lastTimeStamp!));
+        print('App: ${info.packageName}');
+        // print('Total Time in Foreground: ${info.totalTimeInForeground}'); //tiempo de app
+        // print('First Time Stamp: ${firstTimeStamp.toIso8601String()}');
+        // print('Last Time Stamp: ${lastTimeStamp.toIso8601String()}'); //ver tiempos que toma la aplicacion
+      }
       setState(() {
         usageInfoList = filteredUsageInfos;
       });
@@ -750,22 +795,13 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _refresh() async {
     await initUsage();
-    // Obtiene la hora actual
-    DateTime currentDate = DateTime.now().toLocal();
-
-    // Verifica si es UTC y conviértelo a local si es necesario
-    if (currentDate.isUtc) {
-      currentDate = currentDate.toLocal();
-    }
-
-    // Formatea la fecha y hora
+    tz.initializeTimeZones();
+    final location =
+        tz.getLocation('America/Guayaquil'); // Ajusta a tu zona horaria
+    final currentDate = tz.TZDateTime.now(location);
     String formattedDate = DateFormat('yyyy-MM-dd / HH:mm').format(currentDate);
 
-    // String formattedDate = DateFormat('yyyy-MM-dd / HH:mm').format(currentDate);
-
-    // String formattedDate = currentDate.toIso8601String();
     String mostHour = _mostActiveHour;
-
     // Ordena la lista por totalTimeInForeground de mayor a menor
     usageInfoList.sort((a, b) => int.parse(b.totalTimeInForeground!)
         .compareTo(int.parse(a.totalTimeInForeground!)));
@@ -784,11 +820,11 @@ class _MyAppState extends State<MyApp> {
 
     try {
       // var url = Uri.parse('https://ingsoftware.ucuenca.edu.ec/enviar-datos');
-      var url = Uri.parse('http://10.24.160.140:8080/enviar-datos');
+      var url = Uri.parse('http://10.24.162.114:8081/enviar-datos');
       var response = await http.post(
         url,
         body: {
-          'cedula': widget.cedula,
+          'email': widget.email,
           'fecha': formattedDate,
           'mayorConsumo': mostHour, // Obtener la mayor hora de consumo
           'usageData': jsonEncode(
@@ -801,6 +837,8 @@ class _MyAppState extends State<MyApp> {
     } catch (error) {
       print('Error al enviar los datos: $error');
     }
+    // Llamar a _showNotification para mostrar la notificación
+    _showNotification();
   }
 
   void _onTabTapped(int index) {
@@ -814,6 +852,7 @@ class _MyAppState extends State<MyApp> {
   void _updateDate(int days) {
     setState(() {
       currentDate = currentDate.add(Duration(days: days));
+      print('Hora update1:  ${currentDate.toIso8601String()}');
       if (currentDate.isAfter(DateTime.now().toLocal())) {
         currentDate = DateTime.now().toLocal();
       } else if (currentDate
@@ -822,6 +861,7 @@ class _MyAppState extends State<MyApp> {
       }
       usageInfoList.clear();
     });
+    print('Hora update2:  ${currentDate.toIso8601String()}');
     initUsage();
     _getMostActiveHour(currentDate);
   }
@@ -857,28 +897,28 @@ class _MyAppState extends State<MyApp> {
               child: Column(
                 children: [
                   const CircleAvatar(
-                    radius: 32,
+                    radius: 40,
                     backgroundImage: AssetImage('assets/images/icono.png'),
                   ),
                   const SizedBox(width: 5),
                   const Text(
-                    'CIARA',
+                    'Bienvenid@ a CIARA',
                     style: TextStyle(
                       fontFamily: 'FFMetaProText1',
                       color: Colors.white,
-                      fontSize: 22,
+                      fontSize: 18,
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(width: 15),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Bienvenid@ : ${cedula.length >= 10 ? '******${cedula.substring(6)}' : ''}',
+                        'Usuario: ${email.split('@')[0]}',
                         style: const TextStyle(
                           fontFamily: 'FFMetaProText1',
                           color: Colors.white,
-                          fontSize: 19,
+                          fontSize: 18,
                         ),
                       ),
                     ],
@@ -1341,7 +1381,7 @@ class _MyAppState extends State<MyApp> {
   Future<void> getCedula() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      cedula = prefs.getString('cedula') ?? '**';
+      email = prefs.getString('email') ?? '**';
     });
   }
 
@@ -1364,6 +1404,43 @@ class _MyAppState extends State<MyApp> {
       print('Error al obtener la aplicación con icono: $e');
       return null;
     }
+  }
+
+  Future<void> _showNotification() async {
+    // Tiempo de uso actual en minutos
+    int currentUsageMinutes = 270; // 4:30 horas
+    // Tiempo máximo de uso permitido en minutos
+    int maxUsageMinutes = 720; // 12 horas
+
+    // Calcular el porcentaje de uso
+    int usagePercentage =
+        ((currentUsageMinutes / maxUsageMinutes) * 100).toInt();
+
+    // Configurar la notificación con barra de progreso
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'your channel id',
+      'your channel name',
+      'your channel description',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: 'ic_notificacion',
+      showProgress: true,
+      maxProgress: maxUsageMinutes,
+      progress: currentUsageMinutes,
+      indeterminate: false, // Indicar que la barra de progreso es determinante
+    );
+
+    final NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      'Alerta de tiempo de uso:',
+      'Has usado aplicaciones por más de 4:30 horas. Uso: $usagePercentage%',
+      platformChannelSpecifics,
+      payload: 'item x',
+    );
   }
 
   //Función para obtener el nombre de la aplicación
